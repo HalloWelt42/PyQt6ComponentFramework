@@ -1,4 +1,299 @@
-# Qt Component Framework - Vollständige Anleitung
+## Fehlerbehebung
+
+### Häufige Probleme und Lösungen
+
+#### 1. Import-Fehler
+
+**Problem**: `ModuleNotFoundError: No module named 'qt_components'`
+
+**Lösung**:
+```bash
+# Stelle sicher, dass src als Source Root markiert ist
+# In PyCharm: Rechtsklick auf src → Mark Directory as → Sources Root
+
+# Oder füge zum Python-Path hinzu:
+export PYTHONPATH="${PYTHONPATH}:${PWD}/src"
+```
+
+#### 2. Icon-Fonts werden nicht angezeigt
+
+**Problem**: Icons erscheinen als Fragezeichen
+
+**Lösung**:
+```bash
+# Fonts neu herunterladen
+./start.sh icons
+
+# Cache leeren
+python -c "from qt_components.utils.icon_manager import IconManager; IconManager.instance().clear_cache()"
+```
+
+#### 3. Styling wird nicht angewendet
+
+**Problem**: Komponenten haben Default-Style
+
+**Lösung**:
+```python
+# Theme explizit laden
+from qt_components.styles.style_manager import StyleManager
+manager = StyleManager.instance()
+manager.load_theme('path/to/theme.json')
+
+# Cache leeren
+manager.style_cache.clear()
+```
+
+#### 4. Performance-Probleme
+
+**Problem**: UI reagiert träge
+
+**Lösung**:
+```python
+# Verwende Batch-Updates
+self.request_update('key1', 'key2')  # Statt einzelne Updates
+
+# Deaktiviere Animationen
+self.setProperty('animated', False)
+
+# Profiling aktivieren
+import cProfile
+cProfile.run('app.exec()')
+```
+
+#### 5. Memory Leaks
+
+**Problem**: Speicherverbrauch steigt kontinuierlich
+
+**Lösung**:
+```python
+# Subscriptions aufräumen
+def on_destroy(self):
+    # Unsubscribe von allen Events
+    self.state.unsubscribe('key', self.callback)
+    
+    # Timer stoppen
+    if hasattr(self, 'timer'):
+        self.timer.stop()
+    
+    # Referenzen löschen
+    self.large_data = None
+```
+
+### Platform-spezifische Probleme
+
+#### macOS / M1
+
+**Problem**: Rendering-Artefakte oder Flackern
+
+**Lösung**:
+```python
+# In der BaseComponent bereits implementiert:
+self.setAttribute(Qt.WA_OpaquePaintEvent, False)
+self.setAttribute(Qt.WA_NoSystemBackground, False)
+
+# Zusätzlich bei Bedarf:
+self.setAttribute(Qt.WA_TranslucentBackground, True)
+```
+
+#### Windows
+
+**Problem**: Schriften sehen unscharf aus
+
+**Lösung**:
+```python
+# High-DPI Support
+app = QApplication(sys.argv)
+app.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+app.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+```
+
+#### Linux
+
+**Problem**: Theme sieht anders aus als erwartet
+
+**Lösung**:
+```bash
+# Qt Style explizit setzen
+export QT_STYLE_OVERRIDE=fusion
+
+# Oder in der Anwendung:
+app.setStyle('Fusion')
+```
+
+## Erweiterte Themen
+
+### Custom State Management
+
+```python
+from qt_components.core.reactive import ReactiveState
+
+class AppState(ReactiveState):
+    """Globaler App-State mit Persistierung."""
+    
+    def __init__(self):
+        super().__init__()
+        self.load_from_disk()
+    
+    def save_to_disk(self):
+        """Speichere State in JSON."""
+        import json
+        with open('.app_state.json', 'w') as f:
+            json.dump(self._values, f)
+    
+    def load_from_disk(self):
+        """Lade State von JSON."""
+        import json
+        try:
+            with open('.app_state.json', 'r') as f:
+                self._values = json.load(f)
+        except:
+            pass
+
+# Global verwenden
+app_state = AppState()
+```
+
+### Plugin-System
+
+```python
+class PluginBase(BaseComponent):
+    """Basis für Plugins."""
+    
+    @property
+    def plugin_info(self):
+        return {
+            'name': 'Unknown Plugin',
+            'version': '1.0.0',
+            'author': 'Unknown'
+        }
+
+class PluginManager:
+    """Verwaltet Plugins."""
+    
+    def __init__(self):
+        self.plugins = {}
+    
+    def register(self, plugin_class):
+        """Registriere Plugin."""
+        instance = plugin_class()
+        info = instance.plugin_info
+        self.plugins[info['name']] = instance
+    
+    def get_plugin(self, name):
+        """Hole Plugin nach Name."""
+        return self.plugins.get(name)
+```
+
+### Testing Best Practices
+
+```python
+# tests/test_components/test_counter.py
+import pytest
+from qt_components.components.counter import Counter
+
+@pytest.fixture
+def counter(qtbot):
+    """Fixture für Counter-Komponente."""
+    widget = Counter(initial=5)
+    qtbot.addWidget(widget)
+    return widget
+
+def test_initial_value(counter):
+    """Test Initial-Wert."""
+    assert counter.state['count'] == 5
+
+def test_increment(counter, qtbot):
+    """Test Increment-Funktion."""
+    initial = counter.state['count']
+    
+    # Klicke Increment-Button
+    qtbot.mouseClick(counter.inc_button, Qt.LeftButton)
+    
+    assert counter.state['count'] == initial + 1
+
+def test_state_subscription(counter):
+    """Test State-Subscriptions."""
+    values = []
+    
+    # Subscribe zu Änderungen
+    counter.state.subscribe('count', lambda v, _: values.append(v))
+    
+    # Ändere State
+    counter.increment()
+    counter.increment()
+    
+    assert values == [6, 7]
+```
+
+## Deployment
+
+### Anwendung verteilen
+
+```bash
+# PyInstaller Setup
+pip install pyinstaller
+
+# Spec-Datei erstellen
+pyinstaller --onefile --windowed \
+    --name "MeineApp" \
+    --icon "assets/icon.ico" \
+    --add-data ".configs:configs" \
+    --add-data "src/qt_components/styles:qt_components/styles" \
+    src/qt_components/examples/main.py
+
+# Build ausführen
+pyinstaller MeineApp.spec
+```
+
+### macOS App Bundle
+
+```bash
+# Setup.py für py2app
+from setuptools import setup
+
+APP = ['src/qt_components/examples/main.py']
+DATA_FILES = [('.configs', ['.configs'])]
+OPTIONS = {
+    'argv_emulation': True,
+    'packages': ['PySide6', 'qt_components'],
+    'iconfile': 'assets/icon.icns',
+}
+
+setup(
+    app=APP,
+    data_files=DATA_FILES,
+    options={'py2app': OPTIONS},
+    setup_requires=['py2app'],
+)
+
+# Build
+python setup.py py2app
+```
+
+## Zusammenfassung
+
+Das Qt Component Framework bietet:
+
+1. **Einfache Komponenten-Entwicklung** mit Svelte-Patterns
+2. **Flexibles Styling** durch JSON-Themes
+3. **Umfangreiches Icon-System** mit tausenden Icons
+4. **Optimale Performance** auf allen Plattformen
+5. **Moderne Entwickler-Experience** mit Hot-Reload
+
+### Nächste Schritte
+
+1. Experimentiere mit den Beispielen
+2. Erstelle eigene Komponenten
+3. Passe das Theme an deine Bedürfnisse an
+4. Teile deine Erfahrungen und Verbesserungen
+
+### Support und Hilfe
+
+- **Dokumentation**: Siehe `docs/` Verzeichnis
+- **Beispiele**: Siehe `src/qt_components/examples/`
+- **Tests**: Siehe `tests/` für Implementierungs-Beispiele
+
+Viel Erfolg mit deinem Qt-Projekt! 🚀# Qt Component Framework - Vollständige Anleitung
 
 Ein modernes, reaktives Component-Framework für Qt-Anwendungen in Python, inspiriert von Svelte's Einfachheit und Reaktivitätsmodell.
 
@@ -683,4 +978,7 @@ def load_data(self):
     try:
         data = self.api.fetch_data()
         self.state['data'] = data
-    except Exception as e
+    except Exception as e:
+        logger.error(f"Fehler beim Laden der Daten: {e}")
+        self.show_error_message("Daten konnten nicht geladen werden")
+        self.state['loading'] = False
