@@ -1,0 +1,12 @@
+{
+  "themes": {
+    "dark": {
+      "colors": {
+        "primary": "#2D7FF9",
+        "background": "#0D1117",
+        "text": "#F0F6FC"
+      }
+    }
+  },
+  "components": {}
+}

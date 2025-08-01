@@ -1,0 +1,12 @@
+{
+  "themes": {
+    "default": {
+      "colors": {
+        "primary": "#007ACC",
+        "background": "#FFFFFF",
+        "text": "#323130"
+      }
+    }
+  },
+  "components": {}
+}
